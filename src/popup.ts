@@ -48,6 +48,11 @@ async function scrape() {
         articleURL,
         image,
         amazonURL: "",
+        amazonBasicURL: "",
+        amazonValidation: "",
+        seoTitle: "",
+        description: "",
+        description2: "",
         title,
         author,
         postDate,
@@ -62,7 +67,7 @@ async function scrape() {
     return data;
   }
 
-  async function fetchAmazonURL(url: string) {
+  async function fetchArticlePage(url: string) {
     try {
       const res = await fetch(url);
       const html = await res.text();
@@ -73,10 +78,35 @@ async function scrape() {
       const amazonBtn = doc.querySelector(
         "a.btn-ecom.main-font"
       ) as HTMLAnchorElement;
-      return amazonBtn?.href || "";
+
+      const seoTitle = doc.querySelector(
+        "h2.item-title.gallery-item-title a"
+      ) as HTMLAnchorElement;
+
+      const description = doc.querySelector(
+        "div.gallery-item-description-1"
+      ) as HTMLDivElement;
+
+      const description2 = doc.querySelector(
+        "div.gallery-item-description-2"
+      ) as HTMLDivElement;
+
+      return {
+        amazonURL: amazonBtn?.href || "",
+        seoTitle: seoTitle?.textContent || "",
+        description:
+          description?.textContent?.replace(/\s+/g, " ").trim() || "",
+        description2:
+          description2?.textContent?.replace(/\s+/g, " ").trim() || "",
+      };
     } catch (error) {
       console.error(`Failed to fetch Amazon URL for URL, ${url}, ${error}`);
-      return "";
+      return {
+        amazonURL: "",
+        seoTitle: "",
+        description: "",
+        description2: "",
+      };
     }
   }
 
@@ -145,7 +175,17 @@ async function scrape() {
 
   let index = 0;
   for (const item of data) {
-    item.amazonURL = await fetchAmazonURL(item.articleURL);
+    const { amazonURL, seoTitle, description, description2 } =
+      await fetchArticlePage(item.articleURL);
+    item.amazonURL = amazonURL;
+    item.seoTitle = seoTitle;
+    item.description = description;
+    item.description2 = description2 + " " + amazonURL;
+    item.amazonBasicURL = amazonURL.split("&")![0] || "";
+    item.amazonValidation =
+      amazonURL.includes("ascsubtag") && amazonURL.includes("&tag=brg_c_6-20")
+        ? "Good"
+        : "Issue, Please fix";
     index++;
     if (index > 5) break; // need to remove when lanuching
   }
