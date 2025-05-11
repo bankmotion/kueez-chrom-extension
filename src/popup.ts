@@ -1,3 +1,4 @@
+import { MessageType } from "./enum";
 import type { DataType } from "./types/DataType";
 // import { delay } from "./utils/utils";
 
@@ -6,7 +7,7 @@ async function scrape() {
     return new Promise((resolve) => setTimeout(resolve, sec * 1000));
   }
 
-  async function collectData() {
+  function collectDataOnCMS() {
     const rows = document.querySelectorAll<HTMLTableRowElement>(
       "table#DataTables_Table_0 > tbody > tr"
     );
@@ -161,6 +162,10 @@ async function scrape() {
   }
 
   console.log("start scrape");
+  // chrome.runtime.sendMessage({
+  //   type: MessageType.StartScraping,
+  //   value: "startProgress",
+  // });
 
   const paginationSelect = document.querySelector(
     'select[name="DataTables_Table_0_length"]'
@@ -172,7 +177,7 @@ async function scrape() {
   }
 
   await delay(3);
-  let data = await collectData();
+  let data = collectDataOnCMS();
   console.log(`data.length`, data.length);
 
   for (let index = 0; index < data.length; index++) {
@@ -193,7 +198,7 @@ async function scrape() {
 
     // update progress
     chrome.runtime.sendMessage({
-      type: "progress",
+      type: MessageType.ScrapingArticle,
       value: ((index + 1) / data.length) * 100,
     });
   }
@@ -220,27 +225,5 @@ document.getElementById("generateBtn")?.addEventListener("click", async () => {
       target: { tabId: tab.id },
       func: scrape,
     });
-  }
-});
-
-chrome.runtime.onMessage.addListener((message: any) => {
-  if (message.type === "progress") {
-    const progressContainer = document.querySelector(
-      "#progressContainer"
-    ) as HTMLDivElement;
-    const progressBar = document.querySelector(
-      "#progressBar"
-    ) as HTMLProgressElement;
-    if (progressContainer) {
-      progressContainer.style.display = "block";
-      progressBar.value = message.value;
-    }
-  }
-
-  if(message.type === "reportBtn") {
-    const reportBtn = document.querySelector("#generateBtn") as HTMLButtonElement
-    if(reportBtn) {
-      
-    }
   }
 });

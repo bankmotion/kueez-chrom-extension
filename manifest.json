@@ -13,6 +13,10 @@
     "default_icon": "public/vite.svg",
     "default_title": "Kueez CMS Scraper"
   },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "content_scripts": [
     {
       "matches": ["https://cms.kueez.net/*"],
