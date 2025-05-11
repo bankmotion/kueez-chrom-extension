@@ -1,11 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Kueez Scraper</title>
-</head>
-<body>
-  <button id="generateBtn">Generate Report</button>
-  <script type="module" src="/src/popup.ts"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Kueez Scraper</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        min-width: 320px;
+        padding: 16px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f9fafb;
+        color: #333;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      h1 {
+        text-align: center;
+        font-size: 1.5em;
+        margin-bottom: 0.5em;
+      }
+
+      p {
+        text-align: center;
+        font-size: 0.9em;
+        margin-bottom: 1.2em;
+        color: #555;
+      }
+
+      button {
+        width: 100%;
+        padding: 12px;
+        font-size: 1em;
+        background-color: #4f46e5;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      button:hover {
+        background-color: #4338ca;
+      }
+
+      #progressContainer {
+        margin-top: 16px;
+        display: none;
+      }
+
+      label {
+        font-size: 0.85em;
+        margin-bottom: 4px;
+        display: block;
+      }
+
+      progress {
+        width: 100%;
+        height: 16px;
+        border-radius: 6px;
+        appearance: none;
+      }
+
+      progress::-webkit-progress-bar {
+        background-color: #e5e7eb;
+        border-radius: 6px;
+      }
+
+      progress::-webkit-progress-value {
+        background-color: #6366f1;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Kueez Scraper</h1>
+    <p>Click below to scrape articles and send reports.</p>
+
+    <button id="generateBtn">🚀 Generate Reports</button>
+
+    <div id="progressContainer">
+      <label for="progressBar">Progress</label>
+      <progress id="progressBar" value="0" max="100"></progress>
+    </div>
+
+    <script type="module" src="/src/popup.ts"></script>
+  </body>
 </html>

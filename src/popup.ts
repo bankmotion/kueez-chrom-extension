@@ -160,6 +160,8 @@ async function scrape() {
     }
   }
 
+  console.log("start scrape");
+
   const paginationSelect = document.querySelector(
     'select[name="DataTables_Table_0_length"]'
   ) as HTMLSelectElement;
@@ -171,10 +173,11 @@ async function scrape() {
 
   await delay(3);
   let data = await collectData();
-  console.log(data.length);
+  console.log(`data.length`, data.length);
 
-  let index = 0;
-  for (const item of data) {
+  for (let index = 0; index < data.length; index++) {
+    const item = data[index];
+
     const { amazonURL, seoTitle, description, description2 } =
       await fetchArticlePage(item.articleURL);
     item.amazonURL = amazonURL;
@@ -186,8 +189,13 @@ async function scrape() {
       amazonURL.includes("ascsubtag") && amazonURL.includes("&tag=brg_c_6-20")
         ? "Good"
         : "Issue, Please fix";
-    index++;
-    if (index > 5) break; // need to remove when lanuching
+    // if (index > 5) break; // need to remove when lanuching
+
+    // update progress
+    chrome.runtime.sendMessage({
+      type: "progress",
+      value: ((index + 1) / data.length) * 100,
+    });
   }
 
   const result = await sendToBackend(data);
@@ -212,5 +220,27 @@ document.getElementById("generateBtn")?.addEventListener("click", async () => {
       target: { tabId: tab.id },
       func: scrape,
     });
+  }
+});
+
+chrome.runtime.onMessage.addListener((message: any) => {
+  if (message.type === "progress") {
+    const progressContainer = document.querySelector(
+      "#progressContainer"
+    ) as HTMLDivElement;
+    const progressBar = document.querySelector(
+      "#progressBar"
+    ) as HTMLProgressElement;
+    if (progressContainer) {
+      progressContainer.style.display = "block";
+      progressBar.value = message.value;
+    }
+  }
+
+  if(message.type === "reportBtn") {
+    const reportBtn = document.querySelector("#generateBtn") as HTMLButtonElement
+    if(reportBtn) {
+      
+    }
   }
 });
