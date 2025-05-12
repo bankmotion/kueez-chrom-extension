@@ -111,42 +111,6 @@ async function scrape() {
     }
   }
 
-  // async function sendToBackend(data: DataType[]) {
-  //   try {
-  //     const batchSize = 10;
-  //     const currentTimestamp = new Date().getTime();
-
-  //     const filteredData = data.filter((item) => !!item.amazonURL);
-
-  //     for (let i = 0; i < filteredData.length; i += batchSize) {
-  //       const amazonURLs = filteredData.slice(i, i + batchSize).map((item) => ({
-  //         amazonURL: item.amazonURL,
-  //         id: item.id,
-  //       }));
-  //       const isFinal = i + batchSize >= filteredData.length;
-
-  //       const res = await fetch("http://localhost:3000/api/scrape", {
-  //         method: "POST",
-  //         headers: {
-  //           "Content-Type": "application/json",
-  //         },
-  //         body: JSON.stringify({ amazonURLs, isFinal, currentTimestamp }),
-  //       });
-  //       console.log("sent to backend");
-
-  //       if (isFinal) {
-  //         const result = await res.json();
-  //         return result as {
-  //           id: number;
-  //           pageCount: number;
-  //         }[];
-  //       }
-  //     }
-  //   } catch (error) {
-  //     console.error(`Failed to send to backend, ${error}`);
-  //   }
-  // }
-
   console.log("start scrape");
 
   chrome.storage.local.set({ data: [] }, () => {
@@ -219,23 +183,6 @@ async function scrape() {
     });
   }
 
-  // chrome.runtime.sendMessage({
-  //   type: "AmazonScrapingOnBackend",
-  //   value: true,
-  // });
-  // const result = await sendToBackend(data);
-  // chrome.runtime.sendMessage({
-  //   type: "AmazonScrapingOnBackend",
-  //   value: false,
-  // });
-  const result: any[] = [];
-
-  if (result) {
-    for (const item of data) {
-      const res = result.find((re) => re.id === item.id);
-      item.pageCount = res?.pageCount || 0;
-    }
-  }
   console.log(data);
 
   chrome.storage.local.set({ data: data }, () => {
@@ -257,7 +204,53 @@ async function scrapeAdCreative() {
     return new Promise((resolve) => setTimeout(resolve, sec * 1000));
   }
 
-  async function sendWebhook(data: DataType[]) {
+  async function sendToBackend(data: DataType[]) {
+    return [];
+    try {
+      const batchSize = 10;
+      const currentTimestamp = new Date().getTime();
+
+      const filteredData = data.filter(
+        (item) => !!item.amazonURL && item.isActive
+      );
+
+      for (let i = 0; i < filteredData.length; i += batchSize) {
+        const amazonURLs = filteredData.slice(i, i + batchSize).map((item) => ({
+          amazonURL: item.amazonURL,
+          id: item.id,
+        }));
+        const isFinal = i + batchSize >= filteredData.length;
+
+        const res = await fetch("http://localhost:3000/api/scrape", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ amazonURLs, isFinal, currentTimestamp }),
+        });
+        console.log("sent to backend");
+
+        if (isFinal) {
+          const result = await res.json();
+          return result as {
+            id: number;
+            pageCount: number;
+          }[];
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to send to backend, ${error}`);
+    }
+  }
+
+  async function sendWebhook(
+    data: DataType[],
+    adCreatives: {
+      id: number;
+      post: string;
+      creative: number;
+    }[]
+  ) {
     try {
       await fetch("https://pavelvulfin.app.n8n.cloud/webhook/kueez-data", {
         // await fetch("https://pavelvulfin.app.n8n.cloud/webhook-test/kueez-data", {
@@ -267,6 +260,18 @@ async function scrapeAdCreative() {
         },
         body: JSON.stringify(data),
       });
+
+      // await fetch("https://pavelvulfin.app.n8n.cloud/webhook/report-data", {
+      await fetch(
+        "https://pavelvulfin.app.n8n.cloud/webhook-test/report-data",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(adCreatives),
+        }
+      );
     } catch (error) {
       console.error(`Failed to send webhook, ${error}`);
     }
@@ -355,7 +360,11 @@ async function scrapeAdCreative() {
   }
 
   await delay(0.5);
-  const ids: number[] = [];
+  const adCreatives: {
+    id: number;
+    post: string;
+    creative: number;
+  }[] = [];
 
   async function waitForTable() {
     const interval = setInterval(async () => {
@@ -370,14 +379,20 @@ async function scrapeAdCreative() {
       rows.forEach((row) => {
         const cells = row.querySelectorAll("td");
         if (cells.length >= 2) {
-          ids.push(parseInt(cells[1].textContent?.trim() || "0"));
+          adCreatives.push({
+            id: parseInt(cells[1].textContent?.trim() || "0"),
+            post: cells[2].textContent?.trim() || "",
+            creative: parseInt(cells[5].textContent?.trim() || "0"),
+          });
         }
       });
 
       clearInterval(interval); // Stop checking after success
-      console.log("✅ Extracted Second Column Values:", ids);
+      console.log("✅ Extracted Second Column Values:", adCreatives);
       data.forEach((item) => {
-        item.isActive = ids.includes(item.id);
+        item.isActive = adCreatives.some(
+          (adCreative) => adCreative.id === item.id
+        );
       });
 
       chrome.storage.local.set({ data: [] }, () => {
@@ -393,7 +408,25 @@ async function scrapeAdCreative() {
 
       await delay(3);
 
-      await sendWebhook(data);
+      chrome.runtime.sendMessage({
+        type: "ScrapeAdCreative",
+        value: "Amazon scraping on backend...",
+      });
+      const result = await sendToBackend(data);
+      // const result: any[] = [];
+      chrome.runtime.sendMessage({
+        type: "ScrapeAdCreative",
+        value: "Amazon scraping on backend finished",
+      });
+
+      if (result) {
+        for (const item of data) {
+          const res = result.find((re) => re.id === item.id);
+          item.pageCount = res?.pageCount || 0;
+        }
+      }
+
+      await sendWebhook(data, adCreatives);
 
       chrome.runtime.sendMessage({
         type: "ScrapeAdCreative",
