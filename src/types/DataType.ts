@@ -16,4 +16,5 @@ export interface DataType {
   isEditorial: string;
   wordCount: string;
   pageCount: number;
+  isActive: boolean;
 }

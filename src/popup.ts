@@ -1,4 +1,3 @@
-import { MessageType } from "./enum";
 import type { DataType } from "./types/DataType";
 // import { delay } from "./utils/utils";
 
@@ -62,6 +61,7 @@ async function scrape() {
         isEditorial,
         wordCount,
         pageCount: 0,
+        isActive: false,
       });
     });
 
@@ -111,74 +111,90 @@ async function scrape() {
     }
   }
 
-  async function sendToBackend(data: DataType[]) {
-    try {
-      const batchSize = 10;
-      const currentTimestamp = new Date().getTime();
+  // async function sendToBackend(data: DataType[]) {
+  //   try {
+  //     const batchSize = 10;
+  //     const currentTimestamp = new Date().getTime();
 
-      const filteredData = data.filter((item) => !!item.amazonURL);
+  //     const filteredData = data.filter((item) => !!item.amazonURL);
 
-      for (let i = 0; i < filteredData.length; i += batchSize) {
-        const amazonURLs = filteredData.slice(i, i + batchSize).map((item) => ({
-          amazonURL: item.amazonURL,
-          id: item.id,
-        }));
-        const isFinal = i + batchSize >= filteredData.length;
+  //     for (let i = 0; i < filteredData.length; i += batchSize) {
+  //       const amazonURLs = filteredData.slice(i, i + batchSize).map((item) => ({
+  //         amazonURL: item.amazonURL,
+  //         id: item.id,
+  //       }));
+  //       const isFinal = i + batchSize >= filteredData.length;
 
-        const res = await fetch("http://localhost:3000/api/scrape", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ amazonURLs, isFinal, currentTimestamp }),
-        });
-        console.log("sent to backend");
+  //       const res = await fetch("http://localhost:3000/api/scrape", {
+  //         method: "POST",
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //         },
+  //         body: JSON.stringify({ amazonURLs, isFinal, currentTimestamp }),
+  //       });
+  //       console.log("sent to backend");
 
-        if (isFinal) {
-          const result = await res.json();
-          return result as {
-            id: number;
-            pageCount: number;
-          }[];
-        }
-      }
-    } catch (error) {
-      console.error(`Failed to send to backend, ${error}`);
-    }
-  }
-
-  async function sendWebhook(data: DataType[]) {
-    try {
-      await fetch("https://pavelvulfin.app.n8n.cloud/webhook-test/kueez-data", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-    } catch (error) {
-      console.error(`Failed to send webhook, ${error}`);
-    }
-  }
+  //       if (isFinal) {
+  //         const result = await res.json();
+  //         return result as {
+  //           id: number;
+  //           pageCount: number;
+  //         }[];
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error(`Failed to send to backend, ${error}`);
+  //   }
+  // }
 
   console.log("start scrape");
-  // chrome.runtime.sendMessage({
-  //   type: MessageType.StartScraping,
-  //   value: "startProgress",
-  // });
+
+  chrome.storage.local.set({ data: [] }, () => {
+    console.log("Data initialized");
+  });
+
+  chrome.runtime.sendMessage({
+    type: "StartScraping",
+    value: "startProgress",
+  });
 
   const paginationSelect = document.querySelector(
     'select[name="DataTables_Table_0_length"]'
   ) as HTMLSelectElement;
 
-  if (paginationSelect) {
-    paginationSelect.value = "500";
-    paginationSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  if (!paginationSelect) {
+    chrome.runtime.sendMessage({
+      type: "ScrapingAdCreative",
+      value: "This page is invalid. Please check the link.",
+    });
+    return;
+  }
+
+  paginationSelect.value = "500";
+  paginationSelect.dispatchEvent(new Event("change", { bubbles: true }));
+
+  await delay(3);
+  const previousPageSelect = document.querySelector(
+    "li#DataTables_Table_0_previous a"
+  );
+  if (previousPageSelect) {
+    previousPageSelect.dispatchEvent(new Event("click", { bubbles: true }));
   }
 
   await delay(3);
-  let data = collectDataOnCMS();
-  console.log(`data.length`, data.length);
+  const firstPageData = collectDataOnCMS();
+
+  const nextPageSelect = document.querySelector("li#DataTables_Table_0_next a");
+  if (nextPageSelect) {
+    nextPageSelect.dispatchEvent(new Event("click", { bubbles: true }));
+  }
+
+  await delay(3);
+  const secondPageData = collectDataOnCMS();
+
+  const data = [...firstPageData, ...secondPageData];
+
+  console.log(`data.length`, data.length, data);
 
   for (let index = 0; index < data.length; index++) {
     const item = data[index];
@@ -194,16 +210,25 @@ async function scrape() {
       amazonURL.includes("ascsubtag") && amazonURL.includes("&tag=brg_c_6-20")
         ? "Good"
         : "Issue, Please fix";
-    // if (index > 5) break; // need to remove when lanuching
+    // if (index > 100) break; // need to remove when lanuching
 
     // update progress
     chrome.runtime.sendMessage({
-      type: MessageType.ScrapingArticle,
+      type: "ScrapingArticle",
       value: ((index + 1) / data.length) * 100,
     });
   }
 
-  const result = await sendToBackend(data);
+  // chrome.runtime.sendMessage({
+  //   type: "AmazonScrapingOnBackend",
+  //   value: true,
+  // });
+  // const result = await sendToBackend(data);
+  // chrome.runtime.sendMessage({
+  //   type: "AmazonScrapingOnBackend",
+  //   value: false,
+  // });
+  const result: any[] = [];
 
   if (result) {
     for (const item of data) {
@@ -213,8 +238,171 @@ async function scrape() {
   }
   console.log(data);
 
-  await delay(1);
-  await sendWebhook(data);
+  chrome.storage.local.set({ data: data }, () => {
+    if (chrome.runtime.lastError) {
+      console.error("Storage Set Error:", chrome.runtime.lastError.message);
+    } else {
+      console.log("Data saved successfully");
+    }
+  });
+
+  // await sendWebhook(data);
+  chrome.runtime.sendMessage({
+    type: "End",
+  });
+}
+
+async function scrapeAdCreative() {
+  async function delay(sec: number) {
+    return new Promise((resolve) => setTimeout(resolve, sec * 1000));
+  }
+
+  async function sendWebhook(data: DataType[]) {
+    try {
+      await fetch("https://pavelvulfin.app.n8n.cloud/webhook/kueez-data", {
+        // await fetch("https://pavelvulfin.app.n8n.cloud/webhook-test/kueez-data", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+    } catch (error) {
+      console.error(`Failed to send webhook, ${error}`);
+    }
+  }
+
+  chrome.runtime.sendMessage({
+    type: "ScrapeAdCreative",
+    value: "",
+  });
+
+  // get data from local storage
+  const data: DataType[] = (await chrome.storage.local.get("data")).data;
+
+  if (!data || data.length === 0) {
+    chrome.runtime.sendMessage({
+      type: "ScrapeAdCreative",
+      value: "No data found. You need to scrape articles first.",
+    });
+    return;
+  }
+
+  // navigate to ad creatives page
+  const adCreativesLink = document.querySelector(
+    'a[href="https://admin.kueez.net/content/ad-creatives"]'
+  ) as HTMLAnchorElement;
+
+  if (!adCreativesLink) {
+    chrome.runtime.sendMessage({
+      type: "ScrapeAdCreative",
+      value: "This page is invalid. Please check the link.",
+    });
+    return;
+  }
+
+  // Click the dropdown to open it
+  // const dropdownToggle = document.querySelector(
+  //   ".multiselect.dropdown-toggle"
+  // ) as HTMLButtonElement;
+  // dropdownToggle?.click();
+
+  await delay(0.5);
+
+  const valuesToSelect = ["post", "creative"];
+
+  valuesToSelect.forEach((value) => {
+    const checkbox = document.querySelector(
+      `input[type="checkbox"][value="${value}"]`
+    ) as HTMLInputElement;
+    console.log(checkbox);
+    if (checkbox && !checkbox.checked) {
+      checkbox.click();
+    }
+  });
+
+  // dropdownToggle?.click();
+  await delay(0.5);
+
+  // discover bestdeals
+  const dropdownButton = document.querySelector(
+    "button.multiselect.dropdown-toggle"
+  ) as HTMLButtonElement;
+
+  if (
+    dropdownButton &&
+    !dropdownButton.parentElement?.classList.contains("open")
+  ) {
+    // dropdownButton.click();
+  }
+
+  await delay(0.5);
+
+  const checkbox = document.querySelector(
+    'input[type="checkbox"][value="287"]'
+  ) as HTMLInputElement;
+
+  if (checkbox && !checkbox.checked) {
+    checkbox.click();
+  }
+  // dropdownButton.click();
+
+  const exportBtn = document.querySelector(
+    ".pull-right > button"
+  ) as HTMLButtonElement;
+  if (exportBtn) {
+    exportBtn.click();
+  }
+
+  await delay(0.5);
+  const ids: number[] = [];
+
+  async function waitForTable() {
+    const interval = setInterval(async () => {
+      const table = document.querySelector(
+        "table.table.table-bordered.table-striped.table-hover"
+      );
+      console.log(table);
+      if (!table) return;
+
+      const rows = table.querySelectorAll("tbody tr");
+
+      rows.forEach((row) => {
+        const cells = row.querySelectorAll("td");
+        if (cells.length >= 2) {
+          ids.push(parseInt(cells[1].textContent?.trim() || "0"));
+        }
+      });
+
+      clearInterval(interval); // Stop checking after success
+      console.log("✅ Extracted Second Column Values:", ids);
+      data.forEach((item) => {
+        item.isActive = ids.includes(item.id);
+      });
+
+      chrome.storage.local.set({ data: [] }, () => {
+        console.log("Data saved");
+      });
+
+      console.log(data);
+
+      chrome.runtime.sendMessage({
+        type: "ScrapeAdCreative",
+        value: "Finished scraping",
+      });
+
+      await delay(3);
+
+      await sendWebhook(data);
+
+      chrome.runtime.sendMessage({
+        type: "ScrapeAdCreative",
+        value: "Finished sending webhook",
+      });
+    }, 1000);
+  }
+
+  waitForTable();
 }
 
 document.getElementById("generateBtn")?.addEventListener("click", async () => {
@@ -225,5 +413,107 @@ document.getElementById("generateBtn")?.addEventListener("click", async () => {
       target: { tabId: tab.id },
       func: scrape,
     });
+  }
+});
+
+document
+  .getElementById("adCreativeBtn")
+  ?.addEventListener("click", async () => {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+
+    if (tab.id) {
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: scrapeAdCreative,
+      });
+    }
+  });
+
+chrome.runtime.onMessage.addListener((message: any) => {
+  const progressContainer = document.querySelector(
+    "#progressContainer"
+  ) as HTMLDivElement;
+  const progressBar = document.querySelector(
+    "#progressBar"
+  ) as HTMLProgressElement;
+  const progressLabel = document.querySelector(
+    "#progressLabel"
+  ) as HTMLLabelElement;
+  const notify = document.querySelector("#notify") as HTMLDivElement;
+  const adCreativeBtn = document.querySelector(
+    "#adCreativeBtn"
+  ) as HTMLButtonElement;
+
+  if (message.type === "StartScraping") {
+    const reportBtn = document.querySelector(
+      "#generateBtn"
+    ) as HTMLButtonElement;
+    if (reportBtn) {
+      if (message.value == "startProgress") {
+        reportBtn.disabled = true;
+      }
+    }
+    progressContainer.style.display = "block";
+    progressLabel.textContent = "Scraping CMS...";
+    progressBar.style.display = "none";
+  }
+
+  if (message.type === "ScrapingArticle") {
+    if (progressContainer && progressBar && progressLabel) {
+      progressContainer.style.display = "block";
+      progressBar.value = message.value;
+      progressBar.style.display = "block";
+      progressLabel.textContent = "Scraping article...";
+    }
+  }
+
+  if (message.type === "AmazonScrapingOnBackend") {
+    progressContainer.style.display = "block";
+    progressLabel.textContent = "Scraping amazon...";
+    progressBar.style.display = "none";
+  }
+
+  if (message.type === "End") {
+    progressContainer.style.display = "block";
+    progressLabel.textContent = "Finished scraping";
+    progressBar.style.display = "none";
+  }
+
+  if (message.type === "ScrapeAdCreative") {
+    notify.textContent = message.value;
+
+    if (message.value === "") {
+      adCreativeBtn.disabled = true;
+    } else if (message.value === "Finished sending webhook") {
+      adCreativeBtn.disabled = false;
+    }
+  }
+});
+
+chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+  const generateBtn = document.querySelector(
+    "#generateBtn"
+  ) as HTMLButtonElement;
+  const adCreativeBtn = document.querySelector(
+    "#adCreativeBtn"
+  ) as HTMLButtonElement;
+
+  const tab = tabs[0];
+  if (!tab || !tab.url) return;
+
+  if (tab.url.includes("cms.kueez.net")) {
+    // Enable generate (scrape) if on CMS
+    generateBtn.disabled = false;
+    adCreativeBtn.disabled = true;
+  } else if (tab.url.includes("admin.kueez.net")) {
+    // Enable ad creative scraping for other pages
+    generateBtn.disabled = true;
+    adCreativeBtn.disabled = false;
+  } else {
+    generateBtn.disabled = true;
+    adCreativeBtn.disabled = true;
   }
 });

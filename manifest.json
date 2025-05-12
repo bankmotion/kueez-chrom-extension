@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Kueez CMS Scraper",
   "version": "1.0",
-  "permissions": ["activeTab", "scripting", "cookies"],
+  "permissions": ["activeTab", "scripting", "cookies", "storage"],
   "host_permissions": [
     "https://cms.kueez.net/*",
     "https://www.amazon.com/*",
@@ -12,10 +12,6 @@
     "default_popup": "popup.html",
     "default_icon": "public/vite.svg",
     "default_title": "Kueez CMS Scraper"
-  },
-  "background": {
-    "service_worker": "background.js",
-    "type": "module"
   },
   "content_scripts": [
     {
