@@ -112,13 +112,14 @@ async function scrape() {
 
   console.log("start scrape");
 
-  chrome.storage.local.set({ data: [] }, () => {
-    console.log("Data initialized");
-  });
-
-  chrome.runtime.sendMessage({
-    type: "StartScraping",
-    value: "startProgress",
+  chrome.storage.local.set({
+    data: {
+      type: "StartScraping",
+      text: "Scraping CMS page...",
+      color: "blue",
+      value: 0,
+      data: [],
+    },
   });
 
   const paginationSelect = document.querySelector(
@@ -126,10 +127,16 @@ async function scrape() {
   ) as HTMLSelectElement;
 
   if (!paginationSelect) {
-    chrome.runtime.sendMessage({
-      type: "ScrapingAdCreative",
-      value: "This page is invalid. Please check the link.",
+    chrome.storage.local.set({
+      data: {
+        type: "Error",
+        text: "This page is invalid. Please check the link.",
+        color: "red",
+        value: 0,
+        data: [],
+      },
     });
+
     return;
   }
 
@@ -176,25 +183,26 @@ async function scrape() {
     // if (index > 100) break; // need to remove when lanuching
 
     // update progress
-    chrome.runtime.sendMessage({
-      type: "ScrapingArticle",
-      value: ((index + 1) / data.length) * 100,
+    chrome.storage.local.set({
+      data: {
+        type: "ScrapingArticle",
+        text: `Scraping article ${index + 1} of ${data.length}`,
+        color: "blue",
+        value: ((index + 1) / data.length) * 100,
+      },
     });
   }
 
   console.log(data);
 
-  chrome.storage.local.set({ data: data }, () => {
-    if (chrome.runtime.lastError) {
-      console.error("Storage Set Error:", chrome.runtime.lastError.message);
-    } else {
-      console.log("Data saved successfully");
-    }
-  });
-
-  // await sendWebhook(data);
-  chrome.runtime.sendMessage({
-    type: "End",
+  chrome.storage.local.set({
+    data: {
+      type: "EndScrapingCMS",
+      text: "Finished CMS page scraping. Please start scraping ad creatives.",
+      color: "green",
+      value: 0,
+      data: data,
+    },
   });
 }
 
@@ -206,7 +214,7 @@ async function scrapeAdCreative() {
     // "https://cassielv.app.n8n.cloud/webhook-test/report-data";
     "https://cassielv.app.n8n.cloud/webhook/report-data";
 
-  const BackendURL = "http://localhost:3000";
+  const BackendURL = "https://ca26-46-101-168-26.ngrok-free.app";
 
   async function delay(sec: number) {
     return new Promise((resolve) => setTimeout(resolve, sec * 1000));
@@ -250,9 +258,14 @@ async function scrapeAdCreative() {
         result.push(...subResult);
 
         progress += batchSize;
-        chrome.runtime.sendMessage({
-          type: "ScrapingAdCreativeProgress",
-          value: (progress / filteredData.length) * 100,
+
+        chrome.storage.local.set({
+          data: {
+            type: "ScrapingAdCreativeProgress",
+            text: `Scraping ad creative ${progress} of ${filteredData.length}`,
+            color: "blue",
+            value: (progress / filteredData.length) * 100,
+          },
         });
       }
 
@@ -291,21 +304,30 @@ async function scrapeAdCreative() {
     }
   }
 
-  chrome.runtime.sendMessage({
-    type: "ScrapeAdCreative",
-    value: "",
-  });
-
   // get data from local storage
-  const data: DataType[] = (await chrome.storage.local.get("data")).data;
+  const data: DataType[] = (await chrome.storage.local.get("data")).data.data;
 
   if (!data || data.length === 0) {
-    chrome.runtime.sendMessage({
-      type: "ScrapeAdCreative",
-      value: "No data found. You need to scrape articles first.",
+    chrome.storage.local.set({
+      data: {
+        type: "Error",
+        text: "No data found. You need to scrape articles first.",
+        color: "red",
+        value: 0,
+        data: [],
+      },
     });
     return;
   }
+
+  chrome.storage.local.set({
+    data: {
+      type: "ScrapeAdCreative",
+      text: "Scraping ad creatives...",
+      color: "blue",
+      value: 0,
+    },
+  });
 
   // navigate to ad creatives page
   const adCreativesLink = document.querySelector(
@@ -313,18 +335,17 @@ async function scrapeAdCreative() {
   ) as HTMLAnchorElement;
 
   if (!adCreativesLink) {
-    chrome.runtime.sendMessage({
-      type: "ScrapeAdCreative",
-      value: "This page is invalid. Please check the link.",
+    chrome.storage.local.set({
+      data: {
+        type: "Error",
+        text: "This page is invalid. Please check the link.",
+        color: "red",
+        value: 0,
+        data: [],
+      },
     });
     return;
   }
-
-  // Click the dropdown to open it
-  // const dropdownToggle = document.querySelector(
-  //   ".multiselect.dropdown-toggle"
-  // ) as HTMLButtonElement;
-  // dropdownToggle?.click();
 
   await delay(0.5);
 
@@ -340,21 +361,6 @@ async function scrapeAdCreative() {
     }
   });
 
-  // dropdownToggle?.click();
-  await delay(0.5);
-
-  // discover bestdeals
-  const dropdownButton = document.querySelector(
-    "button.multiselect.dropdown-toggle"
-  ) as HTMLButtonElement;
-
-  if (
-    dropdownButton &&
-    !dropdownButton.parentElement?.classList.contains("open")
-  ) {
-    // dropdownButton.click();
-  }
-
   await delay(0.5);
 
   const checkbox = document.querySelector(
@@ -364,7 +370,6 @@ async function scrapeAdCreative() {
   if (checkbox && !checkbox.checked) {
     checkbox.click();
   }
-  // dropdownButton.click();
 
   const exportBtn = document.querySelector(
     ".pull-right > button"
@@ -409,29 +414,31 @@ async function scrapeAdCreative() {
         );
       });
 
-      chrome.storage.local.set({ data: [] }, () => {
-        console.log("Data saved");
-      });
-
       console.log(data);
 
-      chrome.runtime.sendMessage({
-        type: "ScrapeAdCreative",
-        value: "Finished scraping",
+      chrome.storage.local.set({
+        data: {
+          type: "ScrapeAdCreative",
+          text: "Finished scraping ad creatives",
+          color: "green",
+          value: 100,
+          data: data,
+        },
       });
 
       await delay(3);
 
-      chrome.runtime.sendMessage({
-        type: "ScrapeAdCreative",
-        value: "Amazon scraping on backend...",
-      });
       const result = await sendToBackend(data);
       console.log("result", result);
       // const result: any[] = [];
-      chrome.runtime.sendMessage({
-        type: "ScrapeAdCreative",
-        value: "Amazon scraping on backend finished",
+      chrome.storage.local.set({
+        data: {
+          type: "ScrapeAdCreative",
+          text: "Amazon scraping on backend finished",
+          color: "green",
+          value: 100,
+          data: data,
+        },
       });
 
       if (result) {
@@ -443,9 +450,14 @@ async function scrapeAdCreative() {
 
       await sendWebhook(data, adCreatives);
 
-      chrome.runtime.sendMessage({
-        type: "ScrapeAdCreative",
-        value: "Finished sending webhook",
+      chrome.storage.local.set({
+        data: {
+          type: "FinishSendingWebhook",
+          text: "Finished sending webhook. Please check the Reports files",
+          color: "green",
+          value: 100,
+          data: data,
+        },
       });
     }, 1000);
   }
@@ -480,76 +492,6 @@ document
     }
   });
 
-chrome.runtime.onMessage.addListener((message: any) => {
-  const progressContainer = document.querySelector(
-    "#progressContainer"
-  ) as HTMLDivElement;
-  const progressBar = document.querySelector(
-    "#progressBar"
-  ) as HTMLProgressElement;
-  const progressLabel = document.querySelector(
-    "#progressLabel"
-  ) as HTMLLabelElement;
-  const notify = document.querySelector("#notify") as HTMLDivElement;
-  const adCreativeBtn = document.querySelector(
-    "#adCreativeBtn"
-  ) as HTMLButtonElement;
-  const adProgressBar = document.querySelector(
-    "#adProgressBar"
-  ) as HTMLProgressElement;
-
-  if (message.type === "StartScraping") {
-    const reportBtn = document.querySelector(
-      "#generateBtn"
-    ) as HTMLButtonElement;
-    if (reportBtn) {
-      if (message.value == "startProgress") {
-        reportBtn.disabled = true;
-      }
-    }
-    progressContainer.style.display = "block";
-    progressLabel.textContent = "Scraping CMS...";
-    progressBar.style.display = "none";
-  }
-
-  if (message.type === "ScrapingArticle") {
-    if (progressContainer && progressBar && progressLabel) {
-      progressContainer.style.display = "block";
-      progressBar.value = message.value;
-      progressBar.style.display = "block";
-      progressLabel.textContent = "Scraping article...";
-    }
-  }
-
-  if (message.type === "AmazonScrapingOnBackend") {
-    progressContainer.style.display = "block";
-    progressLabel.textContent = "Scraping amazon...";
-    progressBar.style.display = "none";
-  }
-
-  if (message.type === "End") {
-    progressContainer.style.display = "block";
-    progressLabel.textContent = "Finished scraping";
-    progressBar.style.display = "none";
-  }
-
-  if (message.type === "ScrapeAdCreative") {
-    notify.textContent = message.value;
-
-    if (message.value === "") {
-      adCreativeBtn.disabled = true;
-    } else if (message.value === "Finished sending webhook") {
-      adCreativeBtn.disabled = false;
-    }
-  }
-
-  if (message.type === "ScrapingAdCreativeProgress") {
-    adProgressBar.style.display = "block";
-    adProgressBar.value = message.value;
-    notify.textContent = "Scraping AMZ on backend...";
-  }
-});
-
 chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
   const generateBtn = document.querySelector(
     "#generateBtn"
@@ -574,3 +516,54 @@ chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     adCreativeBtn.disabled = true;
   }
 });
+
+let count = 0;
+let currentType = "";
+
+setInterval(() => {
+  chrome.storage.local.get("data", (result) => {
+    const progress = document.querySelector(
+      "#adProgressBar"
+    ) as HTMLProgressElement;
+
+    const notify = document.querySelector("#notify") as HTMLDivElement;
+
+    if (!progress || !notify) return;
+
+    if (result.data.type !== currentType) {
+      count = 0;
+      currentType = result.data.type;
+    }
+    count++;
+
+    if (
+      count > 10 &&
+      (currentType === "FinishSendingWebhook" ||
+        currentType === "EndScrapingCMS")
+    ) {
+      progress.style.display = "none";
+      notify.textContent = "";
+      return;
+    }
+
+    const res = result.data;
+    console.log(res);
+
+    if (res.text) {
+      if (notify) {
+        notify.innerHTML = res.text;
+
+        if (res.color) {
+          notify.style.color = res.color;
+        }
+      }
+    }
+
+    if (res.value) {
+      progress.style.display = "block";
+      progress.value = res.value;
+    } else {
+      progress.style.display = "none";
+    }
+  });
+}, 300);
