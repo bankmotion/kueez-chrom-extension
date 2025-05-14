@@ -200,12 +200,22 @@ async function scrape() {
 }
 
 async function scrapeAdCreative() {
+  const CMSWebhookURL =
+    // "https://cassielv.app.n8n.cloud/webhook-test/kueez-data";
+    "https://cassielv.app.n8n.cloud/webhook/kueez-data";
+  const ReportWebhookURL =
+    // "https://cassielv.app.n8n.cloud/webhook-test/report-data";
+    "https://cassielv.app.n8n.cloud/webhook/report-data";
+
+  const BackendURL = "http://localhost:3000";
+
   async function delay(sec: number) {
     return new Promise((resolve) => setTimeout(resolve, sec * 1000));
   }
 
   async function sendToBackend(data: DataType[]) {
-    return [];
+    // return [];
+    console.log("send to backend");
     try {
       const batchSize = 10;
       const currentTimestamp = new Date().getTime();
@@ -214,30 +224,40 @@ async function scrapeAdCreative() {
         (item) => !!item.amazonURL && item.isActive
       );
 
+      const result: {
+        id: number;
+        pageCount: number;
+      }[] = [];
+
+      let progress = 0;
+
       for (let i = 0; i < filteredData.length; i += batchSize) {
         const amazonURLs = filteredData.slice(i, i + batchSize).map((item) => ({
           amazonURL: item.amazonURL,
           id: item.id,
         }));
-        const isFinal = i + batchSize >= filteredData.length;
 
-        const res = await fetch("http://localhost:3000/api/scrape", {
+        const res = await fetch(`${BackendURL}/api/scrape`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ amazonURLs, isFinal, currentTimestamp }),
+          body: JSON.stringify({ amazonURLs, currentTimestamp }),
         });
         console.log("sent to backend");
 
-        if (isFinal) {
-          const result = await res.json();
-          return result as {
-            id: number;
-            pageCount: number;
-          }[];
-        }
+        const subResult = await res.json();
+        console.log("subResult", subResult);
+        result.push(...subResult);
+
+        progress += batchSize;
+        chrome.runtime.sendMessage({
+          type: "ScrapingAdCreativeProgress",
+          value: (progress / filteredData.length) * 100,
+        });
       }
+
+      return result;
     } catch (error) {
       console.error(`Failed to send to backend, ${error}`);
     }
@@ -252,8 +272,7 @@ async function scrapeAdCreative() {
     }[]
   ) {
     try {
-      await fetch("https://pavelvulfin.app.n8n.cloud/webhook/kueez-data", {
-        // await fetch("https://pavelvulfin.app.n8n.cloud/webhook-test/kueez-data", {
+      await fetch(CMSWebhookURL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -261,17 +280,13 @@ async function scrapeAdCreative() {
         body: JSON.stringify(data),
       });
 
-      // await fetch("https://pavelvulfin.app.n8n.cloud/webhook/report-data", {
-      await fetch(
-        "https://pavelvulfin.app.n8n.cloud/webhook-test/report-data",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(adCreatives),
-        }
-      );
+      await fetch(ReportWebhookURL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(adCreatives),
+      });
     } catch (error) {
       console.error(`Failed to send webhook, ${error}`);
     }
@@ -413,6 +428,7 @@ async function scrapeAdCreative() {
         value: "Amazon scraping on backend...",
       });
       const result = await sendToBackend(data);
+      console.log("result", result);
       // const result: any[] = [];
       chrome.runtime.sendMessage({
         type: "ScrapeAdCreative",
@@ -479,6 +495,9 @@ chrome.runtime.onMessage.addListener((message: any) => {
   const adCreativeBtn = document.querySelector(
     "#adCreativeBtn"
   ) as HTMLButtonElement;
+  const adProgressBar = document.querySelector(
+    "#adProgressBar"
+  ) as HTMLProgressElement;
 
   if (message.type === "StartScraping") {
     const reportBtn = document.querySelector(
@@ -523,6 +542,12 @@ chrome.runtime.onMessage.addListener((message: any) => {
     } else if (message.value === "Finished sending webhook") {
       adCreativeBtn.disabled = false;
     }
+  }
+
+  if (message.type === "ScrapingAdCreativeProgress") {
+    adProgressBar.style.display = "block";
+    adProgressBar.value = message.value;
+    notify.textContent = "Scraping AMZ on backend...";
   }
 });
 

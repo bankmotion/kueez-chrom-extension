@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Kueez CMS Scraper",
+  "name": "Cassiel Scraper",
   "version": "1.0",
   "permissions": ["activeTab", "scripting", "cookies", "storage"],
   "host_permissions": [
@@ -11,7 +11,7 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": "public/vite.svg",
-    "default_title": "Kueez CMS Scraper"
+    "default_title": "Cassiel Scraper"
   },
   "content_scripts": [
     {
