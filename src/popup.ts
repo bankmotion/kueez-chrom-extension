@@ -1,5 +1,4 @@
 import type { DataType } from "./types/DataType";
-// import { delay } from "./utils/utils";
 
 async function scrape() {
   async function delay(sec: number) {
